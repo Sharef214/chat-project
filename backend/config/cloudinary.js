@@ -37,7 +37,7 @@ const voiceStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'sharef-chat/voice',
-    allowed_formats: ['mp3', 'wav', 'ogg', 'm4a', 'webm', 'aac', 'mp4'], // Add mp4 for iOS
+    allowed_formats: ['mp3', 'wav', 'ogg', 'm4a', 'webm', 'aac'],
     resource_type: 'video', // Use video resource type for audio files
     public_id: (req, file) => {
       const timestamp = Date.now();
