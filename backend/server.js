@@ -10,22 +10,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 
 
-// Serve React frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  
-  // Serve static files from React build
-  app.use(express.static(path.join(__dirname, '../frontend/build')));
-  
-  // Catch all handler: send back React's index.html file for non-API routes
-  app.get('*', (req, res) => {
-    // Don't serve React for API routes
-    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
-      return res.status(404).json({ error: 'API route not found' });
-    }
-    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
-  });
-}
+
 
 // Import database models and helpers
 const {
@@ -70,6 +55,24 @@ const io = socketIo(server, {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+
+// Serve React frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  
+  // Serve static files from React build
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Catch all handler: send back React's index.html file for non-API routes
+  app.get('*', (req, res) => {
+    // Don't serve React for API routes
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+      return res.status(404).json({ error: 'API route not found' });
+    }
+    res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+  });
+}
 
 // Configure multer with Cloudinary storage for regular files
 const upload = multer({
