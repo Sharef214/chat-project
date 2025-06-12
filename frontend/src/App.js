@@ -1142,31 +1142,70 @@ const CustomerChat = ({ setCurrentView }) => {
     }
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks = [];
-
-      recorder.ondataavailable = (event) => {
-        chunks.push(event.data);
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        await sendVoiceNote(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
-      setAudioChunks(chunks);
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Could not access microphone');
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 44100
+      } 
+    });
+    
+    // Check what formats are supported
+    const options = [];
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+      options.push('audio/webm;codecs=opus');
+    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+      options.push('audio/mp4');
+    } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+      options.push('audio/wav');
+    } else {
+      options.push('audio/webm'); // fallback
     }
-  };
+    
+    const recorder = new MediaRecorder(stream, { 
+      mimeType: options[0] 
+    });
+    
+    const chunks = [];
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    };
+
+    recorder.onstop = async () => {
+      // Determine file extension based on format
+      const mimeType = recorder.mimeType;
+      let extension = 'webm';
+      if (mimeType.includes('mp4')) extension = 'mp4';
+      if (mimeType.includes('wav')) extension = 'wav';
+      
+      const audioBlob = new Blob(chunks, { type: mimeType });
+      
+      console.log('🎤 Mobile voice recording:', {
+        size: audioBlob.size,
+        type: audioBlob.type,
+        extension: extension
+      });
+      
+      await sendVoiceNote(audioBlob, extension);
+      stream.getTracks().forEach(track => track.stop());
+    };
+
+    recorder.start();
+    setMediaRecorder(recorder);
+    setAudioChunks(chunks);
+    setIsRecording(true);
+    
+    console.log('🎤 Started recording with format:', recorder.mimeType);
+  } catch (error) {
+    console.error('❌ Mobile recording error:', error);
+    alert('Microphone access denied or not available. Please check permissions.');
+  }
+};
 
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
@@ -1175,41 +1214,51 @@ const CustomerChat = ({ setCurrentView }) => {
     }
   };
 
-  const sendVoiceNote = async (audioBlob) => {
-    if (!customerData || !socketRef.current?.connected) return;
+const sendVoiceNote = async (audioBlob, extension = 'webm') => {
+  if (!customerData || !socketRef.current?.connected) return;
 
-    try {
-      const formData = new FormData();
-      formData.append('voice', audioBlob, 'voice-note.webm');
+  try {
+    const formData = new FormData();
+    formData.append('voice', audioBlob, `voice-note.${extension}`);
+    formData.append('duration', '0'); // You can calculate this if needed
 
-      const response = await fetch(`${API_BASE}/api/upload-voice`, {
-        method: 'POST',
-        body: formData
-      });
+    console.log('📤 Uploading voice note:', {
+      size: audioBlob.size,
+      type: audioBlob.type,
+      extension: extension
+    });
 
-      if (response.ok) {
-        const voiceInfo = await response.json();
-        
-        const messageData = {
-          roomId: customerData.roomId,
-          message: 'Voice note',
-          sender: 'customer',
-          senderId: customerData.customerId,
-          messageType: 'voice',
-          fileData: {
-            ...voiceInfo,
-            url: voiceInfo.secure_url || voiceInfo.url // Use Cloudinary URL directly
-          }
-        };
+    const response = await fetch(`${API_BASE}/api/upload-voice`, {
+      method: 'POST',
+      body: formData
+    });
 
-        console.log('📤 Sending voice note:', messageData);
-        socketRef.current.emit('send-message', messageData);
-      }
-    } catch (error) {
-      console.error('Error uploading voice note:', error);
+    if (response.ok) {
+      const voiceInfo = await response.json();
+      
+      const messageData = {
+        roomId: customerData.roomId,
+        message: 'Voice note',
+        sender: 'customer',
+        senderId: customerData.customerId,
+        messageType: 'voice',
+        fileData: {
+          ...voiceInfo,
+          url: voiceInfo.secure_url || voiceInfo.url
+        }
+      };
+
+      console.log('📤 Sending voice message:', messageData);
+      socketRef.current.emit('send-message', messageData);
+    } else {
+      console.error('❌ Voice upload failed:', response.status);
       alert('Failed to upload voice note');
     }
-  };
+  } catch (error) {
+    console.error('❌ Error uploading voice note:', error);
+    alert('Failed to upload voice note');
+  }
+};
 
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
@@ -2501,21 +2550,24 @@ const WorkerDashboard = ({ setCurrentView }) => {
 
                 {/* Voice recording button */}
                 <button
-                  onClick={isRecording ? stopRecording : startRecording}
-                  disabled={!socketRef.current?.connected}
+                  onTouchStart={isRecording ? stopRecording : startRecording}
+                  onMouseDown={isRecording ? stopRecording : startRecording} // Fallback for desktop
+                  disabled={!isConnected}
                   style={{ 
-                    padding: '8px 12px', 
+                    padding: '12px 16px', 
                     backgroundColor: isRecording ? '#dc3545' : '#28a745', 
                     color: 'white', 
                     border: 'none', 
-                    borderRadius: '5px', 
-                    fontSize: '14px',
-                    cursor: socketRef.current?.connected ? 'pointer' : 'not-allowed',
-                    opacity: socketRef.current?.connected ? 1 : 0.5,
+                    borderRadius: '50%', 
+                    fontSize: '16px',
+                    cursor: isConnected ? 'pointer' : 'not-allowed',
+                    opacity: isConnected ? 1 : 0.5,
                     marginRight: '8px',
-                    animation: isRecording ? 'pulse 1s infinite' : 'none'
+                    animation: isRecording ? 'pulse 1s infinite' : 'none',
+                    minHeight: '44px', // iOS touch target
+                    minWidth: '44px'
                   }}
-                  title={isRecording ? "Stop recording" : "Record voice note"}
+                  title={isRecording ? "Release to stop recording" : "Hold to record voice note"}
                 >
                   {isRecording ? '⏹️' : '🎤'}
                 </button>
