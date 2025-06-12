@@ -925,6 +925,27 @@ io.on('connection', (socket) => {
 });
 
 
+// Serve React app in production (SAFE VERSION)
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  
+  // Serve static files from React build
+  app.use(express.static(path.join(__dirname, '../frontend/build')));
+  
+  // Serve React app for root route
+  app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+  
+  // Serve React app for specific routes (instead of catch-all)
+  app.get('/worker', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+  
+  app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/build', 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
