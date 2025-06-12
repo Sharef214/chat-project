@@ -1,0 +1,12 @@
+{
+  "name": "sharef-chat",
+  "version": "1.0.0",
+  "description": "Complete chat system with worker management",
+  "scripts": {
+    "build": "cd frontend && npm ci && npm run build",
+    "start": "cd backend && npm ci && npm start"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
